@@ -24,8 +24,8 @@ const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
-const authRoutes = require("./routes/auth"); // NEW
-const userRoutes = require("./routes/userRoutes"); // NEW
+const authRoutes = require("./routes/auth");
+const userRoutes = require("./routes/userRoutes");
 
 const app = express();
 
@@ -35,7 +35,7 @@ app.use(express.json());
 
 // Session middleware for Google OAuth
 app.use(session({
-  secret: process.env.SESSION_SECRET || "your_session_secret",
+  secret: process.env.JWT_SECRET || "your_session_secret",
   resave: false,
   saveUninitialized: false,
   cookie: {
@@ -58,15 +58,15 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 connectDB();
 
-// Test route (keep your existing one)
+// Test route
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "E-commerce API",
     version: "1.0.0",
-    googleAuth: !!process.env.GOOGLE_CLIENT_ID, // Added this line
+    googleAuth: !!process.env.GOOGLE_CLIENT_ID,
     endpoints: {
-      auth: { // Added this section
+      auth: {
         googleLogin: "GET /api/auth/google",
         register: "POST /api/auth/register",
         login: "POST /api/auth/login",
@@ -102,8 +102,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/carts", cartRoutes);
-app.use("/api/auth", authRoutes); // NEW - Add this line
-app.use("/api/users", userRoutes); // NEW - Add this line
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 
 // Health check
 app.get("/health", (req, res) => {
@@ -118,7 +118,7 @@ app.get("/health", (req, res) => {
   });
 });
 
-// ✅ FIXED: 404 Handler with 'next' parameter
+// 404 Handler
 app.use((req, res, next) => {
   res.status(404).json({
     success: false,
@@ -126,7 +126,7 @@ app.use((req, res, next) => {
   });
 });
 
-// ✅ FIXED: Error handler with all 4 parameters
+// Error handler
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
 
