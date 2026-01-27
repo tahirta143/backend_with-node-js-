@@ -1,4 +1,6 @@
 const express = require("express");
+const router = express.Router();
+
 const {
   createProduct,
   getProducts,
@@ -7,12 +9,19 @@ const {
   deleteProduct,
 } = require("../controllers/productController");
 
-const router = express.Router();
+// ✅ Fix the import - make sure the file name matches
+const { protectAdmin } = require("../middleware/authmiddleware");
 
-router.post("/", createProduct);
+// Import upload middleware
+const upload = require("../middleware/uploadMiddleware");
+
+// ADMIN ROUTES (protected)
+router.post("/", protectAdmin, upload.array("images", 5), createProduct);
+router.put("/:id", protectAdmin, upload.array("images", 5), updateProduct);
+router.delete("/:id", protectAdmin, deleteProduct);
+
+// PUBLIC ROUTES
 router.get("/", getProducts);
 router.get("/:id", getProductById);
-router.put("/:id", updateProduct);
-router.delete("/:id", deleteProduct);
 
 module.exports = router;
