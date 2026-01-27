@@ -1,5 +1,7 @@
 const express = require("express");
 const cors = require("cors");
+const passport = require("passport");
+const session = require("express-session");
 
 // Load .env FIRST
 require("dotenv").config();
@@ -8,6 +10,7 @@ console.log("✅ Environment Variables:");
 console.log("PORT:", process.env.PORT);
 console.log("MONGODB_URI:", process.env.MONGODB_URI ? "Set" : "Not set");
 console.log("JWT_SECRET:", process.env.JWT_SECRET ? "Set" : "Not set");
+console.log("GOOGLE_CLIENT_ID:", process.env.GOOGLE_CLIENT_ID ? "Set" : "Not set");
 
 // Set fallback JWT_SECRET for development
 if (!process.env.JWT_SECRET) {
@@ -21,12 +24,30 @@ const productRoutes = require("./routes/productRoutes");
 const categoryRoutes = require("./routes/categoryRoutes");
 const orderRoutes = require("./routes/orderRoutes");
 const cartRoutes = require("./routes/cartRoutes");
+const authRoutes = require("./routes/auth"); // NEW
+const userRoutes = require("./routes/userRoutes"); // NEW
 
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Session middleware for Google OAuth
+app.use(session({
+  secret: process.env.SESSION_SECRET || "your_session_secret",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 24 * 60 * 60 * 1000
+  }
+}));
+
+// Initialize Passport
+app.use(passport.initialize());
+app.use(passport.session());
+require("./config/passport"); // Load passport config
 
 // Request logging
 app.use((req, res, next) => {
@@ -37,13 +58,20 @@ app.use((req, res, next) => {
 // Connect to MongoDB
 connectDB();
 
-// Test route
+// Test route (keep your existing one)
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "E-commerce API",
     version: "1.0.0",
+    googleAuth: !!process.env.GOOGLE_CLIENT_ID, // Added this line
     endpoints: {
+      auth: { // Added this section
+        googleLogin: "GET /api/auth/google",
+        register: "POST /api/auth/register",
+        login: "POST /api/auth/login",
+        profile: "GET /api/auth/me (requires auth)",
+      },
       admin: {
         register: "POST /api/admin/register",
         login: "POST /api/admin/login",
@@ -52,9 +80,9 @@ app.get("/", (req, res) => {
       products: {
         getAll: "GET /api/products",
         getOne: "GET /api/products/:id",
-        create: "POST /api/products (requires auth)",
-        update: "PUT /api/products/:id (requires auth)",
-        delete: "DELETE /api/products/:id (requires auth)",
+        create: "POST /api/products (requires admin auth)",
+        update: "PUT /api/products/:id (requires admin auth)",
+        delete: "DELETE /api/products/:id (requires admin auth)",
       },
       carts: {
         createOrUpdate: "POST /api/carts",
@@ -74,6 +102,8 @@ app.use("/api/products", productRoutes);
 app.use("/api/categories", categoryRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/carts", cartRoutes);
+app.use("/api/auth", authRoutes); // NEW - Add this line
+app.use("/api/users", userRoutes); // NEW - Add this line
 
 // Health check
 app.get("/health", (req, res) => {
@@ -94,14 +124,12 @@ app.use((req, res, next) => {
     success: false,
     message: `Route not found: ${req.method} ${req.originalUrl}`,
   });
-  // Don't call next() here - we're sending the final response
 });
 
 // ✅ FIXED: Error handler with all 4 parameters
 app.use((err, req, res, next) => {
   console.error("Server error:", err);
 
-  // Check if headers have already been sent
   if (res.headersSent) {
     return next(err);
   }
@@ -117,4 +145,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`\n✅ Server started successfully!`);
   console.log(`🌐 Server URL: http://localhost:${PORT}`);
+  console.log(`🔐 Google OAuth: ${process.env.GOOGLE_CLIENT_ID ? "Enabled" : "Disabled"}`);
 });
