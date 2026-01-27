@@ -12,3 +12,11 @@ build/
 
 .vscode/
 .idea/
+# Ignore environment variables
+.env
+
+# Node modules
+node_modules/
+
+# Logs
+*.log
