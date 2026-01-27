@@ -5,38 +5,68 @@ const connectDB = async () => {
     const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI;
     
     if (!mongoURI) {
-      console.error("❌ MongoDB URI is not defined in .env file");
-      console.log("Please add MONGODB_URI to your .env file");
-      process.exit(1);
+      console.error("❌ MongoDB URI is not defined in environment variables");
+      
+      if (process.env.NODE_ENV === 'production') {
+        console.log("Please set MONGODB_URI in Render environment variables");
+      }
+      
+      throw new Error("MongoDB URI is required");
     }
     
     // Show masked URI (hide password)
     const maskedURI = mongoURI.replace(/:([^:@]+)@/, ':****@');
-    console.log(`🔗 Connecting to: ${maskedURI}`);
+    console.log(`🔗 Connecting to MongoDB: ${maskedURI}`);
     
-    // Simple connection without deprecated options
-    await mongoose.connect(mongoURI);
+    const options = {
+      serverSelectionTimeoutMS: 10000, // 10 seconds
+      socketTimeoutMS: 45000, // 45 seconds
+      maxPoolSize: 10,
+    };
+    
+    const conn = await mongoose.connect(mongoURI, options);
     
     console.log(`✅ MongoDB Connected Successfully!`);
-    console.log(`📊 Database: ${mongoose.connection.db.databaseName}`);
+    console.log(`📊 Database: ${conn.connection.db.databaseName}`);
+    console.log(`🏠 Host: ${conn.connection.host}`);
+    
+    // Connection events
+    mongoose.connection.on('error', (err) => {
+      console.error('Mongoose connection error:', err.message);
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      console.log('Mongoose disconnected from MongoDB');
+      
+      // Auto-reconnect in production
+      if (process.env.NODE_ENV === 'production') {
+        console.log('Attempting to reconnect in 5 seconds...');
+        setTimeout(connectDB, 5000);
+      }
+    });
     
   } catch (error) {
     console.error("\n❌ MongoDB Connection Failed!");
     console.error("Error:", error.message);
     
-    // Common error troubleshooting
     if (error.message.includes('bad auth')) {
-      console.log("\n🔧 Authentication Issues:");
-      console.log("1. Check your password in .env file");
-      console.log("2. Reset password in MongoDB Atlas if needed");
-      console.log("3. Ensure IP is whitelisted (39.39.162.59)");
+      console.log("\n🔧 Authentication failed. Possible issues:");
+      console.log("1. Check password in environment variables");
+      console.log("2. Verify IP is whitelisted in MongoDB Atlas");
+      console.log("3. Check if user has correct database permissions");
     } else if (error.message.includes('ENOTFOUND')) {
-      console.log("\n🔧 Network Issues:");
-      console.log("1. Check your internet connection");
-      console.log("2. Verify the MongoDB URI is correct");
+      console.log("\n🔧 Network error. Possible issues:");
+      console.log("1. Check internet connection");
+      console.log("2. Verify MongoDB URI is correct");
     }
     
-    process.exit(1);
+    // Retry logic for production
+    if (process.env.NODE_ENV === 'production') {
+      console.log("\n🔄 Retrying connection in 10 seconds...");
+      setTimeout(connectDB, 10000);
+    } else {
+      process.exit(1);
+    }
   }
 };
 
