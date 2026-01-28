@@ -2,71 +2,75 @@ const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    const mongoURI = process.env.MONGODB_URI || process.env.MONGO_URI;
-    
+    const mongoURI = process.env.MONGODB_URI;
+
     if (!mongoURI) {
-      console.error("❌ MongoDB URI is not defined in environment variables");
-      
-      if (process.env.NODE_ENV === 'production') {
-        console.log("Please set MONGODB_URI in Render environment variables");
-      }
-      
+      console.error("❌ MONGODB_URI is not defined in environment variables");
+      console.log("💡 Set it in Render: MONGODB_URI=mongodb+srv://...");
       throw new Error("MongoDB URI is required");
     }
-    
-    // Show masked URI (hide password)
-    const maskedURI = mongoURI.replace(/:([^:@]+)@/, ':****@');
+
+    // Show connection info (mask password)
+    const maskedURI = mongoURI.replace(/:([^:@]+)@/, ":****@");
     console.log(`🔗 Connecting to MongoDB: ${maskedURI}`);
-    
+
+    // Connection options
     const options = {
-      serverSelectionTimeoutMS: 10000, // 10 seconds
-      socketTimeoutMS: 45000, // 45 seconds
+      serverSelectionTimeoutMS: 30000, // 30 seconds
+      socketTimeoutMS: 45000,
+      connectTimeoutMS: 30000,
       maxPoolSize: 10,
+      retryWrites: true,
+      w: "majority",
     };
-    
+
+    console.log("⏳ Establishing connection (timeout: 30s)...");
+
     const conn = await mongoose.connect(mongoURI, options);
-    
+
     console.log(`✅ MongoDB Connected Successfully!`);
     console.log(`📊 Database: ${conn.connection.db.databaseName}`);
     console.log(`🏠 Host: ${conn.connection.host}`);
-    
-    // Connection events
-    mongoose.connection.on('error', (err) => {
-      console.error('Mongoose connection error:', err.message);
+
+    // Connection event handlers
+    mongoose.connection.on("error", (err) => {
+      console.error("MongoDB connection error:", err.message);
     });
-    
-    mongoose.connection.on('disconnected', () => {
-      console.log('Mongoose disconnected from MongoDB');
-      
-      // Auto-reconnect in production
-      if (process.env.NODE_ENV === 'production') {
-        console.log('Attempting to reconnect in 5 seconds...');
-        setTimeout(connectDB, 5000);
-      }
+
+    mongoose.connection.on("disconnected", () => {
+      console.log("MongoDB disconnected. Attempting to reconnect...");
     });
-    
+
+    mongoose.connection.on("reconnected", () => {
+      console.log("MongoDB reconnected!");
+    });
+
+    return conn;
   } catch (error) {
     console.error("\n❌ MongoDB Connection Failed!");
     console.error("Error:", error.message);
-    
-    if (error.message.includes('bad auth')) {
-      console.log("\n🔧 Authentication failed. Possible issues:");
-      console.log("1. Check password in environment variables");
-      console.log("2. Verify IP is whitelisted in MongoDB Atlas");
-      console.log("3. Check if user has correct database permissions");
-    } else if (error.message.includes('ENOTFOUND')) {
-      console.log("\n🔧 Network error. Possible issues:");
-      console.log("1. Check internet connection");
-      console.log("2. Verify MongoDB URI is correct");
+    console.error("Error name:", error.name);
+
+    // Provide specific troubleshooting tips
+    if (error.name === "MongoServerSelectionError") {
+      console.log(
+        "\n🔧 FIX: Go to MongoDB Atlas → Network Access → Add 0.0.0.0/0",
+      );
+      console.log("🔧 FIX: Wait 3 minutes after adding IP address");
+    } else if (
+      error.message.includes("bad auth") ||
+      error.message.includes("Authentication failed")
+    ) {
+      console.log("\n🔧 FIX: Check username/password in MONGODB_URI");
+      console.log(
+        "🔧 FIX: Create new user with simple password (no special chars)",
+      );
+    } else if (error.message.includes("ENOTFOUND")) {
+      console.log("\n🔧 FIX: Check cluster name in connection string");
+      console.log("🔧 FIX: Verify cluster is active in MongoDB Atlas");
     }
-    
-    // Retry logic for production
-    if (process.env.NODE_ENV === 'production') {
-      console.log("\n🔄 Retrying connection in 10 seconds...");
-      setTimeout(connectDB, 10000);
-    } else {
-      process.exit(1);
-    }
+
+    throw error; // Re-throw so server startup can catch it
   }
 };
 
