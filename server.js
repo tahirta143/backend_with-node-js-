@@ -8,7 +8,9 @@ const session = require("express-session");
 // Load .env FIRST
 require("dotenv").config();
 
-console.log(`🚀 Starting server in ${process.env.NODE_ENV || 'development'} mode`);
+console.log(
+  `🚀 Starting server in ${process.env.NODE_ENV || "development"} mode`,
+);
 
 const connectDB = require("./config/db");
 const adminRoutes = require("./routes/adminRoutes");
@@ -22,52 +24,58 @@ const userRoutes = require("./routes/userRoutes");
 const app = express();
 
 // Security middleware (install: npm install helmet compression)
-app.use(helmet({
-  contentSecurityPolicy: false, // Disable for API (or configure properly)
-}));
+app.use(
+  helmet({
+    contentSecurityPolicy: false, // Disable for API (or configure properly)
+  }),
+);
 app.use(compression());
 
 // CORS configuration for Render
 const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:5000',
-  'https://ecommerce-backend.onrender.com'
+  "https://backend-with-node-js-ueii.onrender.com",
 ];
 
-app.use(cors({
-  origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `CORS policy does not allow access from ${origin}`;
-      console.warn(`CORS blocked: ${origin}`);
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = `CORS policy does not allow access from ${origin}`;
+        console.warn(`CORS blocked: ${origin}`);
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+  }),
+);
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Session configuration for production
-app.use(session({
-  secret: process.env.JWT_SECRET || "your_session_secret_change_this",
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    secure: process.env.NODE_ENV === 'production',
-    httpOnly: true,
-    maxAge: 24 * 60 * 60 * 1000, // 24 hours
-    sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax'
-  },
-  proxy: true // Trust Render proxy
-}));
+app.use(
+  session({
+    secret: process.env.JWT_SECRET || "your_session_secret_change_this",
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: process.env.NODE_ENV === "production",
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    },
+    proxy: true, // Trust Render proxy
+  }),
+);
 
 // Initialize Passport
 app.use(passport.initialize());
@@ -76,7 +84,9 @@ require("./config/passport");
 
 // Request logging
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.ip} - ${req.method} ${req.originalUrl}`);
+  console.log(
+    `${new Date().toISOString()} - ${req.ip} - ${req.method} ${req.originalUrl}`,
+  );
   next();
 });
 
@@ -89,8 +99,8 @@ app.get("/", (req, res) => {
     success: true,
     message: "E-commerce API",
     version: "1.0.0",
-    environment: process.env.NODE_ENV || 'development',
-    deployed: process.env.NODE_ENV === 'production' ? 'Render' : 'Local',
+    environment: process.env.NODE_ENV || "development",
+    deployed: process.env.NODE_ENV === "production" ? "Render" : "Local",
     uptime: process.uptime(),
     googleAuth: !!process.env.GOOGLE_CLIENT_ID,
     endpoints: {
@@ -110,9 +120,9 @@ app.get("/", (req, res) => {
       orders: "GET /api/orders",
       carts: "GET /api/carts",
       users: "GET /api/users",
-      health: "GET /health"
+      health: "GET /health",
     },
-    documentation: "https://ecommerce-backend.onrender.com"
+    documentation: "https://backend-with-node-js-ueii.onrender.com",
   });
 });
 
@@ -129,7 +139,7 @@ app.use("/api/users", userRoutes);
 app.get("/health", (req, res) => {
   const mongoose = require("mongoose");
   const dbStatus = mongoose.connection.readyState;
-  
+
   const healthStatus = {
     status: dbStatus === 1 ? "healthy" : "unhealthy",
     timestamp: new Date().toISOString(),
@@ -137,13 +147,16 @@ app.get("/health", (req, res) => {
     memory: process.memoryUsage(),
     database: {
       connected: dbStatus === 1,
-      state: ['disconnected', 'connected', 'connecting', 'disconnecting'][dbStatus] || 'unknown'
+      state:
+        ["disconnected", "connected", "connecting", "disconnecting"][
+          dbStatus
+        ] || "unknown",
     },
-    environment: process.env.NODE_ENV || 'development',
+    environment: process.env.NODE_ENV || "development",
     nodeVersion: process.version,
-    platform: process.platform
+    platform: process.platform,
   };
-  
+
   res.status(dbStatus === 1 ? 200 : 503).json(healthStatus);
 });
 
@@ -154,7 +167,7 @@ app.get("/test", (req, res) => {
     message: "API is working on Render! 🚀",
     server: "Render",
     timestamp: new Date().toISOString(),
-    url: "https://ecommerce-backend.onrender.com"
+    url: "https://backend-with-node-js-ueii.onrender.com",
   });
 });
 
@@ -169,8 +182,8 @@ app.use((req, res, next) => {
       "GET /test",
       "GET /api/products",
       "POST /api/auth/register",
-      "POST /api/auth/login"
-    ]
+      "POST /api/auth/login",
+    ],
   });
 });
 
@@ -179,38 +192,38 @@ app.use((err, req, res, next) => {
   console.error("💥 Server Error:", err);
 
   const statusCode = err.status || 500;
-  
+
   res.status(statusCode).json({
     success: false,
     message: err.message || "Internal server error",
-    error: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-    timestamp: new Date().toISOString()
+    error: process.env.NODE_ENV === "development" ? err.stack : undefined,
+    timestamp: new Date().toISOString(),
   });
 });
 
 // Use PORT from environment (Render provides 10000)
 const PORT = process.env.PORT || 5000;
-const HOST = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
+const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
 app.listen(PORT, HOST, () => {
   console.log(`
   🚀 Server started successfully!
-  🌐 Environment: ${process.env.NODE_ENV || 'development'}
+  🌐 Environment: ${process.env.NODE_ENV || "development"}
   📍 Host: ${HOST}
   🔢 Port: ${PORT}
   🔗 Local URL: http://localhost:${PORT}
-  🌍 Production URL: https://ecommerce-backend.onrender.com
+  🌍 Production URL: https://backend-with-node-js-ueii.onrender.com
   🕒 Time: ${new Date().toISOString()}
   `);
 });
 
 // Handle graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
+process.on("SIGTERM", () => {
+  console.log("SIGTERM received. Shutting down gracefully...");
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down...');
+process.on("SIGINT", () => {
+  console.log("SIGINT received. Shutting down...");
   process.exit(0);
 });
