@@ -6,6 +6,7 @@ const User = require("../models/User");
 passport.serializeUser((user, done) => {
   done(null, user.id);
 });
+console.log("🔥🔥 PASSPORT CONFIG LOADED 🔥🔥");
 
 // Deserialize user from session
 passport.deserializeUser(async (id, done) => {
