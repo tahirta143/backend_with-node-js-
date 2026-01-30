@@ -29,46 +29,85 @@ const app = express();
 app.use(
   helmet({
     contentSecurityPolicy: false,
+    crossOriginResourcePolicy: false, // Important for CORS
   }),
 );
 app.use(compression());
 
-// CORS - Allow all for now (simplify)
-app.use(
-  cors({
-    origin: true, // Allow all origins for testing
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  }),
-);
+// CORS Configuration - UPDATED
+const corsOptions = {
+  origin: true, // Allow all origins for now
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "token", // ADD THIS - Your frontend sends "token" header
+    "X-Requested-With",
+    "Accept",
+    "Origin",
+    "Access-Control-Request-Method",
+    "Access-Control-Request-Headers"
+  ],
+  exposedHeaders: ["Authorization", "token"],
+  maxAge: 86400, // 24 hours
+  optionsSuccessStatus: 204
+};
+
+app.use(cors({
+  origin: true, // Allow all origins
+  credentials: true, // Allow credentials (cookies, authorization headers, etc.)
+  exposedHeaders: ['Authorization', 'token']
+}));
+
+// Handle OPTIONS requests explicitly (preflight)
+app.options('*', cors());
 
 // Body parsing
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
-// Request logging
+// Request logging with CORS info
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.originalUrl}`);
+  console.log(`  Origin: ${req.headers.origin || 'none'}`);
+  console.log(`  Auth Header: ${req.headers.authorization ? 'Present' : 'Missing'}`);
+  console.log(`  Token Header: ${req.headers.token ? 'Present' : 'Missing'}`);
+  next();
+});
+
+// Add CORS headers to all responses
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header(
+      "Access-Control-Allow-Headers",
+      "Origin, X-Requested-With, Content-Type, Accept, Authorization, token"
+    );
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+    res.header("Access-Control-Expose-Headers", "Authorization, token");
+  }
+  
+  // Handle OPTIONS method
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  
   next();
 });
 
 // ====================
-// ROUTES (CAN BE SET UP BEFORE DB CONNECTION)
+// BASIC ROUTES (ALWAYS AVAILABLE)
 // ====================
 
-// Basic test routes (don't need DB)
 app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "E-commerce API",
     version: "1.0.0",
     environment: process.env.NODE_ENV || "development",
-    endpoints: {
-      health: "GET /health",
-      test: "GET /test",
-      dbStatus: "GET /db-status",
-    },
     timestamp: new Date().toISOString(),
   });
 });
@@ -82,44 +121,42 @@ app.get("/test", (req, res) => {
   });
 });
 
-// Database status endpoint
-app.get("/db-status", (req, res) => {
-  const mongoose = require("mongoose");
-  const dbStatus = mongoose.connection.readyState;
-
-  res.json({
-    database: {
-      connected: dbStatus === 1,
-      state:
-        ["disconnected", "connected", "connecting", "disconnecting"][
-          dbStatus
-        ] || "unknown",
-      host: mongoose.connection.host,
-      name: mongoose.connection.name,
-    },
+// Health check
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    status: "healthy",
     timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || "development",
+    message: "API server is running",
   });
 });
 
-// Health check
-app.get("/health", (req, res) => {
-  const mongoose = require("mongoose");
-  const dbStatus = mongoose.connection.readyState;
-
-  const healthStatus = {
-    status: dbStatus === 1 ? "healthy" : "degraded",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    database: {
-      connected: dbStatus === 1,
-      state: ["disconnected", "connected", "connecting", "disconnecting"][
-        dbStatus
-      ],
-    },
-    environment: process.env.NODE_ENV || "development",
-  };
-
-  res.status(dbStatus === 1 ? 200 : 503).json(healthStatus);
+// Database status endpoint
+app.get("/db-status", async (req, res) => {
+  try {
+    const mongoose = require("mongoose");
+    const dbStatus = mongoose.connection.readyState;
+    
+    res.json({
+      success: true,
+      database: {
+        connected: dbStatus === 1,
+        state: ["disconnected", "connected", "connecting", "disconnecting"][dbStatus] || "unknown",
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    res.status(503).json({
+      success: false,
+      database: {
+        connected: false,
+        state: "error",
+        error: error.message,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 // ====================
@@ -134,7 +171,7 @@ const startServer = async () => {
     await connectDB();
     console.log("✅ MongoDB connected successfully!");
 
-    // 2. NOW register API routes (after DB is connected)
+    // 2. Register API routes
     console.log("📦 Registering API routes...");
     app.use("/api/admin", adminRoutes);
     app.use("/api/products", productRoutes);
@@ -144,20 +181,13 @@ const startServer = async () => {
     app.use("/api/auth", authRoutes);
     app.use("/api/users", userRoutes);
 
-    // 3. Error handlers (after all routes)
+    // 3. Error handlers
     // 404 Handler
     app.use((req, res) => {
       res.status(404).json({
         success: false,
         message: `Route not found: ${req.method} ${req.originalUrl}`,
-        availableEndpoints: [
-          "GET /",
-          "GET /health",
-          "GET /test",
-          "GET /db-status",
-          "POST /api/auth/register",
-          "POST /api/auth/login",
-        ],
+        timestamp: new Date().toISOString(),
       });
     });
 
@@ -174,8 +204,7 @@ const startServer = async () => {
 
     // 4. Start server
     const PORT = process.env.PORT || 5000;
-    const HOST =
-      process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
 
     app.listen(PORT, HOST, () => {
       console.log(`
@@ -185,31 +214,34 @@ const startServer = async () => {
       🌐 Environment: ${process.env.NODE_ENV || "development"}
       📍 Host: ${HOST}
       🔢 Port: ${PORT}
-      🌍 Production URL: https://backend-with-node-js-ueii.onrender.com
-      🗄️  Database: ${process.env.MONGODB_URI ? "Connected to MongoDB Atlas" : "No DB connection"}
+      🌍 URL: https://backend-with-node-js-ueii.onrender.com
+      🗄️  Database: Connected to MongoDB Atlas
       🕒 Time: ${new Date().toISOString()}
       ========================================
       `);
-
-      // Test routes
-      console.log(`
-      📋 Test these endpoints:
-      • Health:   https://backend-with-node-js-ueii.onrender.com/health
-      • DB Status: https://backend-with-node-js-ueii.onrender.com/db-status
-      • Test:     https://backend-with-node-js-ueii.onrender.com/test
-      • Register: POST https://backend-with-node-js-ueii.onrender.com/api/auth/register
-      `);
     });
   } catch (error) {
-    console.error("\n❌❌❌ SERVER STARTUP FAILED ❌❌❌");
+    console.error("\n❌ DATABASE CONNECTION FAILED");
     console.error("Error:", error.message);
-    console.error("\n🔧 Common fixes:");
-    console.error("1. Check MONGODB_URI in Render environment variables");
-    console.error("2. Verify MongoDB Atlas Network Access (add 0.0.0.0/0)");
-    console.error("3. Check username/password in connection string");
-    console.error("4. Ensure cluster is active in MongoDB Atlas");
-    console.error("\n💡 Server will not start without database connection.");
-    process.exit(1);
+    
+    // Start server anyway (routes will return errors but server will run)
+    const PORT = process.env.PORT || 5000;
+    const HOST = process.env.NODE_ENV === "production" ? "0.0.0.0" : "localhost";
+    
+    app.listen(PORT, HOST, () => {
+      console.log(`
+      ========================================
+      ⚠️  Server started WITHOUT database
+      ========================================
+      🌐 Environment: ${process.env.NODE_ENV || "development"}
+      📍 Host: ${HOST}
+      🔢 Port: ${PORT}
+      🌍 URL: https://backend-with-node-js-ueii.onrender.com
+      🗄️  Database: DISCONNECTED
+      🕒 Time: ${new Date().toISOString()}
+      ========================================
+      `);
+    });
   }
 };
 
