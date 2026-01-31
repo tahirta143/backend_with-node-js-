@@ -1,5 +1,5 @@
 const Category = require("../models/category");
-
+const mongoose = require("mongoose");
 // @desc    Get all categories
 // @route   GET /api/categories
 // @access  Public
